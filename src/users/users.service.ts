@@ -1,12 +1,34 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common'
+import { ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
 import { DatabaseService } from 'src/database/database.service'
+import { User } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly jwtService: JwtService
+  ) {}
 
-  // Register new user
+  private createAccessToken(user: User) {
+    const payload = { sub: user.id, email: user.email };
+    return this.jwtService.sign(payload, { expiresIn: '15m' });
+  }
+
+  private createRefreshToken(user: User) {
+    const payload = { sub: user.id };
+    return this.jwtService.sign(payload, { expiresIn: '7d' });
+  }
+
+  async validateUser(email: string, password: string) {
+    const user = await this.databaseService.user.findUnique({ where: { email } });
+    if (!user) return null;
+    const matched = await bcrypt.compare(password, user.password);
+    if (!matched) return null;
+    return user;
+  }
+
   async register(name: string, email: string, password: string) {
     try {
       const salt = Number(10)
@@ -39,13 +61,63 @@ export class UsersService {
     }
   }
 
-  // Get user by name
-  async findByName(name: string) {
-    return this.databaseService.user.findFirst({ where: { name } })
+  async login(email: string, password: string) {
+    const user = await this.validateUser(email, password);
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const accessToken = this.createAccessToken(user);
+    const refreshTokenPlain = this.createRefreshToken(user);
+
+    // Hash refresh token before storing
+    const hashedRefresh = await bcrypt.hash(refreshTokenPlain, Number(process.env.BCRYPT_SALT_ROUNDS ?? 10));
+    await this.databaseService.user.update({
+      where: { id: user.id },
+      data: { refreshToken: hashedRefresh },
+    });
+
+    return {
+      accessToken,
+      refreshToken: refreshTokenPlain, // send plain to client; only hashed stored server-side
+      user: { id: user.id, email: user.email, name: user.name },
+    };
   }
 
-  // Get user by email
-  async findByEmail(email: string) {
-    return this.databaseService.user.findUnique({ where: { email } })
+  async refresh(refreshToken: string) {
+    try {
+      // verify token signature and expiration using jwt.verify
+      const payload = this.jwtService.verify<{ sub: number }>(refreshToken);
+      const userId = payload.sub;
+      const user = await this.databaseService.user.findUnique({ where: { id: userId } });
+      if (!user || !user.refreshToken) throw new UnauthorizedException('Invalid refresh token');
+
+      // Compare provided refresh token with hashed stored one
+      const match = await bcrypt.compare(refreshToken, user.refreshToken);
+      if (!match) throw new UnauthorizedException('Invalid refresh token');
+
+      // Issue new access token (and optionally new refresh token)
+      const newAccessToken = this.createAccessToken(user);
+      const newRefreshToken = this.createRefreshToken(user);
+
+      // Store new hashed refresh token, replacing old one
+      const hashedRefresh = await bcrypt.hash(newRefreshToken, Number(process.env.BCRYPT_SALT_ROUNDS));
+      await this.databaseService.user.update({
+        where: { id: user.id },
+        data: { refreshToken: hashedRefresh },
+      });
+
+      return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+    } catch (err) {
+      // JWT verification failure or bcrypt mismatch
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+
+  async logout(userId: number) {
+    // Clear stored refresh token
+    await this.databaseService.user.update({
+      where: { id: userId },
+      data: { refreshToken: null },
+    });
+    return { ok: true };
   }
 }
