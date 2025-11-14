@@ -112,6 +112,19 @@ export class UsersService {
     }
   }
 
+  async findUser(userId: number) {
+    try {   
+      const user = await this.databaseService.user.findUnique({ 
+        where: { id: userId }, 
+        select: { id: true, email: true, name: true } 
+      });
+      if (!user) throw new UnauthorizedException('No user found');
+      return user;
+    } catch (err) {
+      throw new InternalServerErrorException('Failed to get user info.')
+    }
+  }
+
   async logout(userId: number) {
     // Clear stored refresh token
     await this.databaseService.user.update({

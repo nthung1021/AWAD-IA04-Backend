@@ -1,4 +1,6 @@
-import { Body, Controller, Post, HttpCode, HttpStatus, Req, UseGuards, UnauthorizedException } from '@nestjs/common'
+import { 
+  Body, Controller, Get, Post, HttpCode, HttpStatus, Req, UseGuards, UnauthorizedException 
+} from '@nestjs/common'
 import { UsersService } from './users.service'
 import { RegisterUserDto } from './dto/register-user-dto'
 import { LoginDto } from './dto/login-user-dto'
@@ -29,6 +31,13 @@ export class UsersController {
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto) {
     return this.userService.refresh(dto.refreshToken);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async me(@Req() req: any) {
+    const id = req.user.sub;
+    return this.userService.findUser(id);
   }
 
   @UseGuards(JwtAuthGuard)
