@@ -63,7 +63,7 @@ export class UsersService {
 
   async login(email: string, password: string) {
     const user = await this.validateUser(email, password);
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw new UnauthorizedException('Email or password is incorrect');
 
     const accessToken = this.createAccessToken(user);
     const refreshTokenPlain = this.createRefreshToken(user);
