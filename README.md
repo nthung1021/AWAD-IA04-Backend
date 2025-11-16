@@ -23,9 +23,9 @@
 
 ## Introduction
 
-A simple API Endpoint demonstrating the APIs for the User Registration using NestJS framework
+A simple API Endpoint demonstrating the APIs for the User Authentication (with JWT) using NestJS framework
 
-This is the individual assignment (number 3) in the subject Advanced Web Application Development (AWAD)as an exercise for practicing React.
+This is the individual assignment (number 4) in the subject Advanced Web Application Development (AWAD) as an exercise for practicing React.
 
 This is a [Nest.js](https://github.com/nestjs/nest) project
 
