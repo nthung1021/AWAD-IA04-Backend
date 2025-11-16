@@ -69,7 +69,7 @@ export class UsersService {
     const refreshTokenPlain = this.createRefreshToken(user);
 
     // Hash refresh token before storing
-    const hashedRefresh = await bcrypt.hash(refreshTokenPlain, Number(process.env.BCRYPT_SALT_ROUNDS ?? 10));
+    const hashedRefresh = await bcrypt.hash(refreshTokenPlain, Number(process.env.BCRYPT_SALT_ROUNDS));
     await this.databaseService.user.update({
       where: { id: user.id },
       data: { refreshToken: hashedRefresh },
